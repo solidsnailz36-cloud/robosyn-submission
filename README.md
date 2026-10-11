@@ -93,25 +93,27 @@ RoboSynChallenge_ws/
 
 **B. SmolVLA worker context — a Python environment that can `import lerobot`.**
 
-> **LeRobot must be >= 0.6.** The worker builds its processor pipelines from
-> `lerobot.processor`; `policy_action_to_transition` / `transition_to_policy_action` are
-> re-exported from that module only from 0.6 on (on 0.4.x they exist only under
-> `lerobot.processor.converters`, which the worker also falls back to). We pin **0.6.1**,
-> the newest release published on PyPI -- note there is no `0.6.2` on PyPI, so any pin
-> on that version would abort the install.
+> **Pinned to LeRobot 0.4.4** -- the exact release this submission was trained and evaluated
+> with, and the newest one installable in this stack. LeRobot 0.5.0 raised its own
+> `Requires-Python` to `>=3.12`, while this environment is Python 3.10 (the official
+> repository declares the same: `requires-python = ">=3.10"`). Asking pip for a 0.5+
+> version therefore aborts with "Package 'lerobot' requires a different Python".
+> A >= 0.6 host is still fine: the worker reads `policy_action_to_transition` /
+> `transition_to_policy_action` from `lerobot.processor.converters` on 0.4.x and falls back
+> the other way on newer releases.
 
 ```bash
 # Option A: install LeRobot from inside this repository (recommended)
 bash policy/smolvla/setup_lerobot.sh          # clones LeRobot and pip-installs it
 export SMOLVLA_LEROBOT_ROOT="$PWD/policy/smolvla/lerobot"
 
-# Option B: reuse an existing LeRobot >= 0.6 checkout / venv
+# Option B: reuse an existing LeRobot checkout / venv
 export SMOLVLA_LEROBOT_ROOT=/path/to/lerobot
 
 # If the same environment also runs the SmolVLA worker (it may be the same one):
 export SMOLVLA_PYTHON="$(which python)"
 
-# Python packages (pins lerobot==0.6.1, torch cu128, transformers 4.57.6):
+# Python packages (pins lerobot==0.4.4, torch cu128, transformers 4.57.6):
 pip install -r requirements.txt
 ```
 
@@ -125,7 +127,7 @@ The official evaluation host is a **single RTX 5090 (Blackwell, sm_120)** with *
 Our stack is CUDA 12.8:
 
 ```
-Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.1 | transformers 4.57.6
+Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.4.4 | transformers 4.57.6
 ```
 
 If your resolver does not pick the cu128 build by default:
@@ -279,10 +281,13 @@ behaviour when that attribute is absent.
 
 ### 5.4 LeRobot version
 
-`requirements.txt` pins **`lerobot==0.6.1`**. `smolvla_worker.py` imports
-`policy_action_to_transition` / `transition_to_policy_action` from `lerobot.processor`, which
-only re-exports them from 0.6 on; the worker also falls back to `lerobot.processor.converters`
-for 0.4.x-style layouts.
+`requirements.txt` pins **`lerobot==0.4.4`** -- the release this submission was trained and
+evaluated with, and the newest one installable here: LeRobot 0.5.0+ requires Python >=3.12,
+while this stack is Python 3.10 (matching the official repository's
+`requires-python = ">=3.10"`). `smolvla_worker.py` reads
+`policy_action_to_transition` / `transition_to_policy_action` from
+`lerobot.processor.converters` (the 0.4.x location) and falls back the other way on newer
+releases, so it runs on either 0.4.x or >= 0.6.
 
 ### 5.5 Verification
 

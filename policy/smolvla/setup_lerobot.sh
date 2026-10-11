@@ -13,7 +13,7 @@ LEROBOT_REPO="${LEROBOT_REPO:-https://github.com/huggingface/lerobot.git}"
 # Pinned to the release the checkpoints were validated against. The worker's
 # processor pipelines are version sensitive, so do NOT default this to a
 # floating branch (e.g. `main`) -- the environment must be reproducible.
-LEROBOT_REF="${LEROBOT_REF:-v0.6.1}"
+LEROBOT_REF="${LEROBOT_REF:-v0.4.4}"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     echo "LeRobot already exists: $INSTALL_DIR"
@@ -25,7 +25,7 @@ cd "$INSTALL_DIR"
 git fetch --tags origin || true
 if ! git checkout "$LEROBOT_REF" 2>/dev/null; then
     echo "!! ref '$LEROBOT_REF' not found; falling back to the PyPI release pinned in requirements.txt"
-    python -m pip install -U "lerobot==0.6.1"
+    python -m pip install -U "lerobot==0.4.4"
 fi
 python -m pip install -U pip
 python -m pip install -e . || true

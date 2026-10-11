@@ -24,7 +24,7 @@
 # The versions below are the CUDA 12.8 stack.
 #
 # Reproduced from our frozen training / evaluation environment:
-#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.6.1
+#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.4.4
 # A complete 134-package freeze is provided in requirements-freeze.txt.
 # ---------------------------------------------------------------------------
 
@@ -37,17 +37,21 @@ torch==2.10.0
 torchvision==0.25.0
 
 # --- LeRobot (SmolVLA policy + processor pipelines) -------------------------
-# IMPORTANT: must be >= 0.6. `policy/smolvla/smolvla_worker.py` builds its
-# pre/post-processor pipelines from `lerobot.processor`; the symbols
-# `policy_action_to_transition` / `transition_to_policy_action` are re-exported
-# from that module only from LeRobot 0.6 on (on 0.4.x they exist only under
-# `lerobot.processor.converters`, which the worker also falls back to).
-# 0.6.1 is the newest LeRobot release published on PyPI; the worker needs >= 0.6.
-# NOTE: do NOT pin the next patch version -- it does not exist on PyPI and the
-# install aborts with "No matching distribution found".
+# Pinned to the exact release this submission was trained and evaluated with.
+#
+# Why not something newer: LeRobot raised its own `Requires-Python` to >=3.12 in
+# 0.5.0. Everything else here targets Python 3.10 (which is also what the
+# official repository's pyproject.toml declares: `requires-python = ">=3.10"`),
+# so 0.4.4 is the newest version pip will resolve. Pinning 0.5.0 or later makes
+# the install abort with "Package 'lerobot' requires a different Python".
+#
+# This does not cost us anything on >= 0.6 hosts: the worker imports
+# `policy_action_to_transition` / `transition_to_policy_action` from
+# `lerobot.processor.converters` (0.4.x layout) and falls back in the reverse
+# direction on newer releases, so either layout works.
 # May also be installed from source by policy/smolvla/setup_lerobot.sh, which
 # is what the README recommends.
-lerobot==0.6.1
+lerobot==0.4.4
 
 # --- SmolVLA / SmolVLM runtime ---------------------------------------------
 transformers==4.57.6

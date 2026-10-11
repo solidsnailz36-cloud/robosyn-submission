@@ -1,21 +1,75 @@
-# Python dependencies for the SmolVLA worker of the RoboSynChallenge submission.
+# ---------------------------------------------------------------------------
+# SmolVLA worker dependencies
+# RoboSynChallenge preliminary (simulation) submission -- team `solidsnail`
+# ---------------------------------------------------------------------------
 #
-# The simulator side (RoboSynChallenge + EmbodiChain) is installed separately by the
-# official installer; these are the packages the SmolVLA worker needs.
+# There are TWO Python contexts during evaluation:
 #
-# LeRobot is installed from source by policy/smolvla/setup_lerobot.sh:
-#     bash policy/smolvla/setup_lerobot.sh        # -> policy/smolvla/lerobot (editable)
-# If you already have LeRobot, set SMOLVLA_LEROBOT_ROOT instead of installing it here.
+#   1) Simulator context : RoboSynChallenge + EmbodiChain, installed from the
+#                          official guide. It brings its own torch/CUDA stack.
+#   2) SmolVLA worker    : the LeRobot SmolVLA process that loads our
+#                          checkpoints. THIS FILE describes context (2).
 #
-# Pinned to the versions used for training/evaluation. If the evaluator's environment
-# already provides compatible versions, the official EmbodiChain install takes precedence.
+# The two may be the SAME environment. If the EmbodiChain environment already
+# provides compatible torch / torchvision / transformers, keep the official
+# ones and only add what is missing (lerobot, torchcodec, num2words).
+#
+# ---------------------------------------------------------------------------
+# GPU NOTE (important)
+# ---------------------------------------------------------------------------
+# The official evaluation host is a single RTX 5090 (Blackwell, compute
+# capability sm_120) with NVIDIA driver 580.95. Blackwell GPUs require a
+# CUDA 12.8+ PyTorch build. A CUDA 12.6 wheel -- such as the torch 2.7.1
+# pinned by policy/act/uv.lock in this repository -- can NOT run on it.
+# The versions below are the CUDA 12.8 stack.
+#
+# Reproduced from our frozen training / evaluation environment:
+#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.4.4
+# A complete 134-package freeze is provided in requirements-freeze.txt.
+# ---------------------------------------------------------------------------
 
-torch>=2.4
-torchvision
-numpy>=1.24
-pillow
-huggingface_hub>=0.34
-safetensors
-einops
-av
-# lerobot  -> installed from source, see above
+# --- PyTorch: CUDA 12.8 build (required for RTX 5090 / sm_120) --------------
+# The default PyPI wheel of torch 2.10.0 already bundles CUDA 12.8. If your
+# resolver picks a different build, install explicitly with:
+#   pip install torch==2.10.0 torchvision==0.25.0 \
+#       --index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0
+torchvision==0.25.0
+
+# --- LeRobot (SmolVLA policy + processor pipelines) -------------------------
+# May also be installed from source by policy/smolvla/setup_lerobot.sh, which
+# is what the README recommends. Pin kept here for exact reproduction.
+lerobot==0.4.4
+
+# --- SmolVLA / SmolVLM runtime ---------------------------------------------
+transformers==4.57.6
+tokenizers==0.22.2
+num2words==0.5.14            # required by the SmolVLM text normalizer
+safetensors==0.8.0
+huggingface-hub==0.35.3
+accelerate==1.15.0
+einops==0.8.2
+draccus==0.10.0              # LeRobot configuration layer
+
+# --- Video / image I/O ------------------------------------------------------
+# The checkpoints' train_config.json records "video_backend": "torchcodec".
+torchcodec==0.10.0
+av==15.1.0
+imageio==2.37.4
+imageio-ffmpeg==0.6.0
+pillow==12.3.0
+opencv-python-headless==4.12.0.88
+
+# --- Numerics / data --------------------------------------------------------
+numpy==2.2.6
+pyarrow==25.0.1
+pandas==2.3.3
+datasets==4.8.5
+jsonlines==4.0.0
+
+# --- Misc runtime -----------------------------------------------------------
+gymnasium==1.3.0
+diffusers==0.35.2
+tqdm==4.70.1
+wandb==0.24.2
+rerun-sdk==0.26.2

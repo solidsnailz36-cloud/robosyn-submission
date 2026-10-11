@@ -9,31 +9,253 @@
 
 ---
 
-> ## 📦 Preliminary submission — team `solidsnail`
->
-> **Policy:** SmolVLA (LeRobot), one checkpoint per task · **Coverage:** all 10 tasks
->
-> - **Checkpoints (Hugging Face):** [`solidsnail/robosyn-smolvla-10tasks`](https://huggingface.co/solidsnail/robosyn-smolvla-10tasks)
->   (private; read access granted to the official HF account `RoboSynChallenge`)
-> - **Adapter entry points:** [`policy/smolvla/eval.sh`](policy/smolvla/eval.sh),
->   [`policy/smolvla/deploy_policy.yml`](policy/smolvla/deploy_policy.yml),
->   [`policy/smolvla/deploy_policy.py`](policy/smolvla/deploy_policy.py)
-> - **Task → checkpoint mapping, install steps, exact commands:** see **[`SUBMISSION.md`](SUBMISSION.md)**
-> - **Run all ten tasks:** `bash submission/run_all.sh [gpu_id] [max_episodes]`
->
-> This repository is a snapshot of upstream `EDEM-AI/RoboSynChallenge` @ `8818c82` plus the
-> submission documentation and a convenience runner. No evaluation-pipeline source was modified.
+# 📦 Preliminary submission — team `solidsnail`
+
+**Policy:** SmolVLA (LeRobot), fine-tuned **one checkpoint per task** ·
+**Task coverage: all 10 tasks** · **Artifact/experiment name:** `solidsnail-smolvla-10tasks`
+
+| Item | Value |
+| --- | --- |
+| **Checkpoints (Hugging Face)** | **<https://huggingface.co/solidsnail/robosyn-smolvla-10tasks>** — **public**, 10 task sub-directories × 7 files, 8.44 GB total |
+| **Adapter entry points** | [`policy/smolvla/eval.sh`](policy/smolvla/eval.sh) · [`policy/smolvla/deploy_policy.yml`](policy/smolvla/deploy_policy.yml) · [`policy/smolvla/deploy_policy.py`](policy/smolvla/deploy_policy.py) |
+| **Base code revision** | snapshot of upstream `EDEM-AI/RoboSynChallenge` @ `8818c82` |
+| **Training base weights** | `lerobot/smolvla_base` (VLM backbone `HuggingFaceTB/SmolVLM2-500M-Video-Instruct`) |
+| **Runtime requirements** | [`requirements.txt`](requirements.txt) (curated) · [`requirements-freeze.txt`](requirements-freeze.txt) (exact 134-package freeze) |
+
+This repository is a snapshot of the upstream repository plus the submission documentation and a
+convenience runner. **The only source file changed is `policy/smolvla/deploy_policy.py`** — see
+[Adapter change](#adapter-change-1-line-contract-fix) below.
+
+---
+
+## 1. Task → checkpoint mapping
+
+All ten checkpoints live in a **single public** Hugging Face repository,
+`solidsnail/robosyn-smolvla-10tasks`, one sub-directory per task. Each sub-directory holds the
+complete LeRobot `pretrained_model` contents (7 files) **directly at its root** — the same layout
+as the officially released `RoboSynChallenge/SmolVLA_sim_<task>` repositories — so the downloaded
+directory can be passed to `eval.sh` unchanged as `checkpoint_path`.
+
+| # | `task_name` (arg 1 of `eval.sh`) | Checkpoint URL | `checkpoint_path` after download |
+| --- | --- | --- | --- |
+| 1 | `table_rearrangement` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/table_rearrangement> | `checkpoints/table_rearrangement` |
+| 2 | `click_bell` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/click_bell> | `checkpoints/click_bell` |
+| 3 | `water_pouring` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/water_pouring> | `checkpoints/water_pouring` |
+| 4 | `handle_basket` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/handle_basket> | `checkpoints/handle_basket` |
+| 5 | `items_handover` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/items_handover> | `checkpoints/items_handover` |
+| 6 | `drawer_open_place` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/drawer_open_place> | `checkpoints/drawer_open_place` |
+| 7 | `mixer_operating` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/mixer_operating> | `checkpoints/mixer_operating` |
+| 8 | `item_assembly` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/item_assembly> | `checkpoints/item_assembly` |
+| 9 | `manipulate_pipette` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/manipulate_pipette> | `checkpoints/manipulate_pipette` |
+| 10 | `sample_loading` | <https://huggingface.co/solidsnail/robosyn-smolvla-10tasks/tree/main/sample_loading> | `checkpoints/sample_loading` |
+
+Every `checkpoints/<task>/` directory contains `config.json`, `model.safetensors`,
+`policy_preprocessor.json`, `policy_preprocessor_step_5_normalizer_processor.safetensors`,
+`policy_postprocessor.json`, `policy_postprocessor_step_0_unnormalizer_processor.safetensors`
+and `train_config.json`. `eval.sh` treats a `checkpoint_path` without a `pretrained_model/`
+sub-folder as the checkpoint directory itself, so `checkpoints/<task>` is accepted as-is.
+
+## 2. Quick start
+
+```bash
+# 1) get the code
+git clone https://github.com/solidsnailz36-cloud/robosyn-submission.git
+cd robosyn-submission
+
+# 2) get all ten checkpoints (single command, ~8.4 GB; the repo is public)
+mkdir -p checkpoints
+hf download solidsnail/robosyn-smolvla-10tasks --repo-type model --local-dir checkpoints
+
+# 3) run one task
+bash policy/smolvla/eval.sh click_bell random checkpoints/click_bell 0 \
+  --pytorch_device cuda --headless true --renderer auto
+
+# 4) or run all ten tasks sequentially
+bash submission/run_all.sh          # gpu_id=0
+bash submission/run_all.sh 0 20     # gpu_id=0, max_episodes=20
+```
+
+## 3. Environment
+
+Two Python contexts are involved (see [`policy/smolvla/README.md`](policy/smolvla/README.md)).
+They may be the same environment, but they do not have to be.
+
+**A. Simulator context — RoboSynChallenge + EmbodiChain.**
+Install per the official guide:
+<https://edem-ai.github.io/RoboSynChallenge/html/getting_started/installation.html>.
+Expected workspace layout:
+
+```
+RoboSynChallenge_ws/
+  EmbodiChain/
+  RoboSynChallenge/     <- this repository
+```
+
+**B. SmolVLA worker context — a Python environment that can `import lerobot`.**
+
+```bash
+# Option A: install LeRobot from inside this repository (recommended)
+bash policy/smolvla/setup_lerobot.sh
+export SMOLVLA_LEROBOT_ROOT="$PWD/policy/smolvla/lerobot"
+
+# Option B: reuse an existing LeRobot checkout
+export SMOLVLA_LEROBOT_ROOT=/path/to/lerobot
+
+# If the same environment also runs the SmolVLA worker:
+export SMOLVLA_PYTHON="$(which python)"
+
+# Python packages:
+pip install -r requirements.txt
+```
+
+<details>
+<summary><b>GPU / CUDA requirement (please read)</b></summary>
+
+The official evaluation host is a **single RTX 5090 (Blackwell, sm_120)** with **NVIDIA driver
+580.95**. Blackwell requires a **CUDA 12.8+** PyTorch build. A CUDA 12.6 wheel — such as the
+`torch 2.7.1` pinned by `policy/act/uv.lock` in this repository — can **not** run on it.
+
+Our stack is CUDA 12.8:
+
+```
+Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.4.4 | transformers 4.57.6
+```
+
+If your resolver does not pick the cu128 build by default:
+
+```bash
+pip install torch==2.10.0 torchvision==0.25.0 \
+    --index-url https://download.pytorch.org/whl/cu128
+```
+
+The exact 134-package freeze we trained and evaluated with is in
+[`requirements-freeze.txt`](requirements-freeze.txt).
+</details>
+
+<details>
+<summary><b>Model / tokenizer download</b></summary>
+
+The checkpoints (`model.safetensors` + the `policy_*` processor configs) are **self-contained**:
+all policy weights are inside the downloaded directories. The SmolVLA worker additionally loads
+the SmolVLM2 text tokenizer / processor assets by name (`HuggingFaceTB/SmolVLM2-500M-Video-Instruct`,
+recorded in each checkpoint's `config.json`). On an offline host, pre-populate the Hugging Face
+cache once:
+
+```bash
+export HF_HOME=<writable cache dir>
+hf download HuggingFaceTB/SmolVLM2-500M-Video-Instruct
+```
+</details>
+
+## 4. Run the evaluation
+
+Single task — the signature is
+`bash policy/smolvla/eval.sh <task_name> <setting> <checkpoint_path> [gpu_id] [extra_opts...]`:
+
+```bash
+task_name=click_bell
+checkpoint_path=checkpoints/${task_name}
+
+bash policy/smolvla/eval.sh ${task_name} random ${checkpoint_path} 0 \
+  --pytorch_device cuda \
+  --headless true \
+  --renderer auto \
+  --max_episodes 20 \
+  --eval_video_log true \
+  --smolvla_steps 10 \
+  --smolvla_rescale_gripper true
+```
+
+All ten tasks use the **same** command, changing only `task_name` and `checkpoint_path`:
+
+```bash
+for t in table_rearrangement click_bell water_pouring handle_basket items_handover \
+         drawer_open_place mixer_operating item_assembly manipulate_pipette sample_loading; do
+  bash policy/smolvla/eval.sh "$t" random "checkpoints/$t" 0 \
+    --pytorch_device cuda --headless true --renderer auto
+done
+```
+
+Or simply:
+
+```bash
+bash submission/run_all.sh
+```
+
+Results, including videos, are written under
+`eval_result/<task_name>/smolvla/<setting>/<train_config_name>/<model_name>/<timestamp>/`.
+
+`<setting>` (arg 2) is supplied by the official evaluation protocol — use `random`.
+
+## 5. Adapter change (1-line contract fix)
+
+The only file we modified relative to upstream `8818c82` is
+[`policy/smolvla/deploy_policy.py`](policy/smolvla/deploy_policy.py).
+
+`scripts/eval_policy.py` documents and uses the adapter contract:
+
+```python
+eval(env, model, obs) -> (obs, info, truncated, inference_times)
+```
+
+and unpacks four values at the call site (`obs, info, truncated, new_times = policy_pkg.eval(...)`),
+as do **all four other adapters in this repository** (`act`, `dp`, `pi0`, `pi05` — each
+`return final_obs, info, truncated, inference_times_s`).
+
+The upstream SmolVLA adapter returned **three** values
+(`return final_obs, info, truncated`), which raises
+`ValueError: not enough values to unpack (expected 4, got 3)` on the very first policy query.
+
+**Fix:** the adapter now times the (synchronous, out-of-process) model inference with the shared
+helper `policy/inference_timing.py` and returns the fourth value:
+
+```python
+started_at = start_inference(None)
+actions = model.infer(encoded_obs, task=instruction)
+inference_times_s = []
+finish_inference(started_at, inference_times_s, None)
+...
+return final_obs, info, truncated, inference_times_s
+```
+
+No other evaluation-pipeline file was touched (`scripts/eval_policy.py`, the environments, the
+task configs, `deploy_policy.yml` and `eval.sh` are byte-identical to upstream).
+
+## 6. Notes on the policy
+
+- **Inputs at inference:** 3 RGB views (`cam_high`, `cam_left_wrist`, `cam_right_wrist`) and the
+  robot joint state (`observation.qpos`). No ground-truth object pose, no contact force, no reward,
+  no `info`, and no other simulator-privileged information.
+- `is_task_success` is only consumed by the official evaluation loop; the controller never uses it.
+- The policy is **task-agnostic in the adapter** — task selection is purely the `task_name`
+  argument plus the selected checkpoint. All ten checkpoints share the same SmolVLA architecture.
+- No network access and no external API are required at evaluation time.
+
+## 7. Provenance
+
+- **Training data:** official released RoboSynChallenge simulated datasets (`cobotmagic_Sim_*`)
+  plus our own self-collected EmbodiChain trajectories. No real-robot data; no third-party datasets.
+- **Training base weights:** `lerobot/smolvla_base`.
+- **Checkpoint integrity:** every `model.safetensors` was verified by SHA-256 against the source
+  artifact the checkpoints were uploaded from.
 
 ---
 
 # Contents
 
-- [Contents](#contents)
-- [Installtion](#installtion)
-- [Datasets](#datasets)
-- [Training and Evaluation](#training-and-evaluation)
-- [Released Checkpoint Results](#released-checkpoint-results)
-- [LeaderBoard](#leaderboard)
+- [📦 Preliminary submission — team `solidsnail`](#-preliminary-submission--team-solidsnail)
+- [1. Task → checkpoint mapping](#1-task--checkpoint-mapping)
+- [2. Quick start](#2-quick-start)
+- [3. Environment](#3-environment)
+- [4. Run the evaluation](#4-run-the-evaluation)
+- [5. Adapter change (1-line contract fix)](#5-adapter-change-1-line-contract-fix)
+- [6. Notes on the policy](#6-notes-on-the-policy)
+- [7. Provenance](#7-provenance)
+- [Upstream: Installation](#installtion)
+- [Upstream: Datasets](#datasets)
+- [Upstream: Training and Evaluation](#training-and-evaluation)
+- [Upstream: Released Checkpoint Results](#released-checkpoint-results)
+- [Upstream: LeaderBoard](#leaderboard)
 
 # Installtion
 Based on the [**EmbodiChain**](https://dexforce.github.io/EmbodiChain/main/quick_start/install.html), we offer both `docker` and `local` installation methods. For detailed installation instructions, please refer to [**Installation Document**](https://edem-ai.github.io/RoboSynChallenge/html/getting_started/installation.html).

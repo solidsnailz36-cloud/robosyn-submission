@@ -15,6 +15,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from policy.inference_timing import finish_inference, start_inference
+
 
 def _to_numpy(value) -> np.ndarray:
     if isinstance(value, torch.Tensor):
@@ -339,7 +341,17 @@ def get_model(usr_args):
 def eval(env, model, obs):
     instruction = getattr(env, "_current_instruction", None) or "click the bell"
     encoded_obs = encode_obs(obs, image_keys=model.image_keys)
+
+    # The SmolVLA model runs in a separate worker process and the RPC is
+    # synchronous, so the wall-clock round trip of model.infer() already covers
+    # the complete model inference. The 4th return value (per-inference seconds)
+    # is required by scripts/eval_policy.py and reported by every other adapter
+    # in this repository (act / dp / pi0 / pi05) via policy/inference_timing.py.
+    started_at = start_inference(None)
     actions = model.infer(encoded_obs, task=instruction)
+    inference_times_s: list[float] = []
+    finish_inference(started_at, inference_times_s, None)
+
     model.maybe_print_action_debug(actions)
 
     final_obs = obs
@@ -358,7 +370,7 @@ def eval(env, model, obs):
         if bool(_to_numpy(truncated).reshape(-1)[0]):
             break
 
-    return final_obs, info, truncated
+    return final_obs, info, truncated, inference_times_s
 
 
 def reset_model(model):

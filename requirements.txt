@@ -24,7 +24,7 @@
 # The versions below are the CUDA 12.8 stack.
 #
 # Reproduced from our frozen training / evaluation environment:
-#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.4.4
+#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.6.2
 # A complete 134-package freeze is provided in requirements-freeze.txt.
 # ---------------------------------------------------------------------------
 
@@ -37,9 +37,15 @@ torch==2.10.0
 torchvision==0.25.0
 
 # --- LeRobot (SmolVLA policy + processor pipelines) -------------------------
+# IMPORTANT: must be >= 0.6. `policy/smolvla/smolvla_worker.py` builds its
+# pre/post-processor pipelines from `lerobot.processor`; the symbols
+# `policy_action_to_transition` / `transition_to_policy_action` are re-exported
+# from that module only from LeRobot 0.6 on (on 0.4.x they exist only under
+# `lerobot.processor.converters`, which the worker also falls back to).
+# 0.6.2 is the release we validated the checkpoints against.
 # May also be installed from source by policy/smolvla/setup_lerobot.sh, which
-# is what the README recommends. Pin kept here for exact reproduction.
-lerobot==0.4.4
+# is what the README recommends.
+lerobot==0.6.2
 
 # --- SmolVLA / SmolVLM runtime ---------------------------------------------
 transformers==4.57.6

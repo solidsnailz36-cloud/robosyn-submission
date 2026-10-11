@@ -7,7 +7,7 @@
 # Defaults: gpu_id=0, max_episodes=20, setting=random
 #
 # Prerequisites:
-#   - checkpoints/<task>/pretrained_model/  (see SUBMISSION.md section 3)
+#   - checkpoints/<task>/  (7 files directly inside; see SUBMISSION.md section 3)
 #   - the SmolVLA worker environment (see SUBMISSION.md section 4)
 # ----------------------------------------------------------------------------
 set -uo pipefail
@@ -56,9 +56,8 @@ for task in "${TASKS[@]}"; do
         --headless true \
         --renderer auto \
         --max_episodes "$MAX_EPISODES" \
-        --eval_video_log true \
         --smolvla_steps 10 \
-        --smolvla_rescale_gripper true
+        --smolvla_rescale_gripper auto
     rc=$?
     echo "<<< [$task] exit=$rc"
     [[ $rc -ne 0 ]] && rc_total=1

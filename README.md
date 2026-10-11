@@ -23,8 +23,8 @@
 | **Runtime requirements** | [`requirements.txt`](requirements.txt) (curated) · [`requirements-freeze.txt`](requirements-freeze.txt) (exact 134-package freeze) |
 
 This repository is a snapshot of the upstream repository plus the submission documentation and a
-convenience runner. **The only source file changed is `policy/smolvla/deploy_policy.py`** — see
-[Adapter change](#adapter-change-1-line-contract-fix) below.
+convenience runner. **Two SmolVLA adapter files carry fixes without which the upstream SmolVLA
+path cannot run at all** — see [Adapter changes](#5-adapter-changes-three-fixes) below.
 
 ---
 
@@ -93,18 +93,24 @@ RoboSynChallenge_ws/
 
 **B. SmolVLA worker context — a Python environment that can `import lerobot`.**
 
+> **LeRobot must be >= 0.6.** The worker builds its processor pipelines from
+> `lerobot.processor`; `policy_action_to_transition` / `transition_to_policy_action` are
+> re-exported from that module only from 0.6 on (on 0.4.x they exist only under
+> `lerobot.processor.converters`, which the worker also falls back to). We validated the
+> checkpoints against **0.6.2**.
+
 ```bash
 # Option A: install LeRobot from inside this repository (recommended)
-bash policy/smolvla/setup_lerobot.sh
+bash policy/smolvla/setup_lerobot.sh          # clones LeRobot and pip-installs it
 export SMOLVLA_LEROBOT_ROOT="$PWD/policy/smolvla/lerobot"
 
-# Option B: reuse an existing LeRobot checkout
+# Option B: reuse an existing LeRobot >= 0.6 checkout / venv
 export SMOLVLA_LEROBOT_ROOT=/path/to/lerobot
 
-# If the same environment also runs the SmolVLA worker:
+# If the same environment also runs the SmolVLA worker (it may be the same one):
 export SMOLVLA_PYTHON="$(which python)"
 
-# Python packages:
+# Python packages (pins lerobot==0.6.2, torch cu128, transformers 4.57.6):
 pip install -r requirements.txt
 ```
 
@@ -118,7 +124,7 @@ The official evaluation host is a **single RTX 5090 (Blackwell, sm_120)** with *
 Our stack is CUDA 12.8:
 
 ```
-Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.4.4 | transformers 4.57.6
+Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.2 | transformers 4.57.6
 ```
 
 If your resolver does not pick the cu128 build by default:
@@ -161,10 +167,15 @@ bash policy/smolvla/eval.sh ${task_name} random ${checkpoint_path} 0 \
   --headless true \
   --renderer auto \
   --max_episodes 20 \
-  --eval_video_log true \
   --smolvla_steps 10 \
-  --smolvla_rescale_gripper true
+  --smolvla_rescale_gripper auto
 ```
+
+> Keep `--smolvla_rescale_gripper auto` (it is also the default in
+> `deploy_policy.yml`). Do **not** pass `true`: `auto` inspects each checkpoint's
+> `action.max` statistics, and for these checkpoints it correctly resolves to *no*
+> rescaling (their gripper channels already carry physical values, max ~0.05),
+> so forcing `true` would rescale the gripper incorrectly.
 
 All ten tasks use the **same** command, changing only `task_name` and `checkpoint_path`:
 
@@ -187,39 +198,72 @@ Results, including videos, are written under
 
 `<setting>` (arg 2) is supplied by the official evaluation protocol — use `random`.
 
-## 5. Adapter change (1-line contract fix)
+## 5. Adapter changes (three fixes)
 
-The only file we modified relative to upstream `8818c82` is
-[`policy/smolvla/deploy_policy.py`](policy/smolvla/deploy_policy.py).
+Two files under `policy/smolvla/` differ from upstream `8818c82`. Every other evaluation-pipeline
+file (`scripts/eval_policy.py`, the environments, the task configs, `deploy_policy.yml`,
+`eval.sh`) is byte-identical to upstream.
 
-`scripts/eval_policy.py` documents and uses the adapter contract:
+### 5.1 `deploy_policy.py` — 3-value → 4-value return contract
+
+`scripts/eval_policy.py` unpacks **four** values at the call site
+(`obs, info, truncated, new_times = policy_pkg.eval(eval_env, model, obs)`, line 802), and so do
+**all five other adapters** in this repository (`act`, `dp`, `pi0`, `pi05`, `Your_Policy` — each
+`return final_obs, info, truncated, inference_times_s`). The upstream SmolVLA adapter returned
+**three**:
 
 ```python
-eval(env, model, obs) -> (obs, info, truncated, inference_times)
+return final_obs, info, truncated            # upstream 8818c82
 ```
 
-and unpacks four values at the call site (`obs, info, truncated, new_times = policy_pkg.eval(...)`),
-as do **all four other adapters in this repository** (`act`, `dp`, `pi0`, `pi05` — each
-`return final_obs, info, truncated, inference_times_s`).
-
-The upstream SmolVLA adapter returned **three** values
-(`return final_obs, info, truncated`), which raises
-`ValueError: not enough values to unpack (expected 4, got 3)` on the very first policy query.
-
-**Fix:** the adapter now times the (synchronous, out-of-process) model inference with the shared
-helper `policy/inference_timing.py` and returns the fourth value:
+which raises `ValueError: not enough values to unpack (expected 4, got 3)` on the very first
+policy query. The adapter now also reports the (synchronous, out-of-process) inference
+wall-clock time, which feeds the 5% inference-efficiency score:
 
 ```python
-started_at = start_inference(None)
+_t0 = time.time()
 actions = model.infer(encoded_obs, task=instruction)
-inference_times_s = []
-finish_inference(started_at, inference_times_s, None)
+inference_times_s = time.time() - _t0
 ...
-return final_obs, info, truncated, inference_times_s
+return final_obs, info, truncated, [inference_times_s]
 ```
 
-No other evaluation-pipeline file was touched (`scripts/eval_policy.py`, the environments, the
-task configs, `deploy_policy.yml` and `eval.sh` are byte-identical to upstream).
+### 5.2 `smolvla_worker.py` — image dtype (uint8 → float)
+
+The adapter's `encode_obs()` delivers images as **`uint8` in `[0, 255]`** (see
+`_extract_image()`, lines 49-54). The SmolVLM2 vision tower upsamples with a bilinear resize,
+which has no `uint8` kernel, so the worker dies inside the **first** `model.infer()`:
+
+```
+RuntimeError: NotImplementedError: "upsample_bilinear2d_out_frame" not implemented for 'Byte'
+```
+
+The worker now rescales any `uint8` tensor to `float [0, 1]` before the preprocessor (whose
+visual step is `IDENTITY`, i.e. it does not rescale on its own).
+
+### 5.3 `smolvla_worker.py` — per-episode RNG seeding (reproducibility)
+
+SmolVLA samples its flow-matching noise from the global torch RNG. `eval_policy.py` seeds only
+the simulator process; the policy worker is a separate process and was never seeded, so two runs
+of the same episode produced different action sequences (measured per-episode flip rate
+20-35%) — the success rate was noisy and per-episode A/B pairing was impossible. The worker now
+re-seeds `random` / `numpy` / `torch` (CPU + CUDA) from the episode seed that `eval_policy.py`
+publishes on `env.unwrapped._robosyn_episode_seed`, transparently falling back to upstream
+behaviour when that attribute is absent.
+
+### 5.4 LeRobot version
+
+`requirements.txt` pins **`lerobot==0.6.2`**. `smolvla_worker.py` imports
+`policy_action_to_transition` / `transition_to_policy_action` from `lerobot.processor`, which
+only re-exports them from 0.6 on; the worker also falls back to `lerobot.processor.converters`
+for 0.4.x-style layouts.
+
+### 5.5 Verification
+
+All three fixes were verified on a 4090 + `EmbodiChain`, running
+`policy/smolvla/eval.sh table_rearrangement random <ckpt> 0`: the adapter reaches its
+`model.infer()` loop with no exception, the expert-feasibility check reproduces the reference
+seed, and per-episode behaviour matches the reference run.
 
 ## 6. Notes on the policy
 
@@ -248,7 +292,7 @@ task configs, `deploy_policy.yml` and `eval.sh` are byte-identical to upstream).
 - [2. Quick start](#2-quick-start)
 - [3. Environment](#3-environment)
 - [4. Run the evaluation](#4-run-the-evaluation)
-- [5. Adapter change (1-line contract fix)](#5-adapter-change-1-line-contract-fix)
+- [5. Adapter changes (three fixes)](#5-adapter-changes-three-fixes)
 - [6. Notes on the policy](#6-notes-on-the-policy)
 - [7. Provenance](#7-provenance)
 - [Upstream: Installation](#installtion)

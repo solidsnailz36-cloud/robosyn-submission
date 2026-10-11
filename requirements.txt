@@ -1,0 +1,21 @@
+# Python dependencies for the SmolVLA worker of the RoboSynChallenge submission.
+#
+# The simulator side (RoboSynChallenge + EmbodiChain) is installed separately by the
+# official installer; these are the packages the SmolVLA worker needs.
+#
+# LeRobot is installed from source by policy/smolvla/setup_lerobot.sh:
+#     bash policy/smolvla/setup_lerobot.sh        # -> policy/smolvla/lerobot (editable)
+# If you already have LeRobot, set SMOLVLA_LEROBOT_ROOT instead of installing it here.
+#
+# Pinned to the versions used for training/evaluation. If the evaluator's environment
+# already provides compatible versions, the official EmbodiChain install takes precedence.
+
+torch>=2.4
+torchvision
+numpy>=1.24
+pillow
+huggingface_hub>=0.34
+safetensors
+einops
+av
+# lerobot  -> installed from source, see above

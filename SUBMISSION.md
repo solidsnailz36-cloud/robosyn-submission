@@ -22,9 +22,10 @@
 ## 1. Task → checkpoint mapping
 
 All ten checkpoints live in a **single** Hugging Face repository,
-`solidsnail/robosyn-smolvla-10tasks`, one sub-directory per task. Each sub-directory is a
-complete LeRobot `pretrained_model/` folder (7 files), i.e. it can be passed to `eval.sh`
-directly as `checkpoint_path`.
+`solidsnail/robosyn-smolvla-10tasks`, one sub-directory per task. Each sub-directory holds the
+complete LeRobot `pretrained_model` contents (7 files) **directly at its root** — the same
+layout as the officially released `RoboSynChallenge/SmolVLA_sim_<task>` repositories — so the
+downloaded directory can be passed to `eval.sh` unchanged as `checkpoint_path`.
 
 | # | `task_name` (eval.sh arg 1) | HF path inside the checkpoint repo | `checkpoint_path` after download |
 | --- | --- | --- | --- |
@@ -39,8 +40,10 @@ directly as `checkpoint_path`.
 | 9 | `table_rearrangement` | `table_rearrangement/` | `checkpoints/table_rearrangement` |
 | 10 | `water_pouring` | `water_pouring/` | `checkpoints/water_pouring` |
 
-Each `checkpoints/<task>/` directory contains a `pretrained_model/` sub-folder; `eval.sh`
-detects this automatically and uses it as the `--checkpoint_dir`.
+Each `checkpoints/<task>/` directory contains the checkpoint files directly
+(`config.json`, `model.safetensors`, `policy_preprocessor.json`, …). `eval.sh` treats a
+`checkpoint_path` that has no `pretrained_model/` sub-folder as the checkpoint directory itself,
+so `checkpoints/<task>` is accepted as-is.
 
 ---
 
@@ -64,7 +67,7 @@ mkdir -p checkpoints
 hf download solidsnail/robosyn-smolvla-10tasks --repo-type model --local-dir checkpoints
 ```
 
-Result: `checkpoints/<task>/pretrained_model/{config.json, model.safetensors, ...}` for all 10 tasks.
+Result: `checkpoints/<task>/{config.json, model.safetensors, policy_preprocessor.json, ...}` for all 10 tasks.
 
 ## 4. Environment
 

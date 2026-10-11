@@ -12,7 +12,7 @@
 | Checkpoint repo visibility | **public** — no collaborator invite or token is needed; anyone (including the organizers) can read it |
 | Base code revision | `EDEM-AI/RoboSynChallenge` @ `8818c82` (Configure deterministic top camera randomization) |
 | Training base weights | `lerobot/smolvla_base` (VLM backbone `HuggingFaceTB/SmolVLM2-500M-Video-Instruct`) |
-| Runtime Python | 3.10.12 — `torch 2.10.0+cu128`, `torchvision 0.25.0`, `lerobot 0.6.2`, `transformers 4.57.6` |
+| Runtime Python | 3.10.12 — `torch 2.10.0+cu128`, `torchvision 0.25.0`, `lerobot 0.6.1`, `transformers 4.57.6` |
 
 > The policy adapter is **task-agnostic**: a single `eval.sh` + `deploy_policy.yml` covers all ten
 > tasks. The task is selected by the `<task_name>` argument; the checkpoint is selected by the
@@ -101,7 +101,7 @@ Two Python contexts are involved (see `policy/smolvla/README.md`):
      RoboSynChallenge/
    ```
 2. **SmolVLA worker context** — a Python environment that can `import lerobot` **>= 0.6**
-   (`requirements.txt` pins `lerobot==0.6.2`; see section 9.4).
+   (`requirements.txt` pins `lerobot==0.6.1`; see section 9.4).
 
 ```bash
 # Option A: install LeRobot from inside this repo (recommended)
@@ -127,7 +127,7 @@ such as the `torch 2.7.1` pinned by `policy/act/uv.lock` — can **not** run on 
 This submission was trained and evaluated on:
 
 ```
-Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.2 | transformers 4.57.6
+Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.1 | transformers 4.57.6
 ```
 
 If your resolver does not pick the cu128 build by default:
@@ -172,7 +172,7 @@ bash submission/run_all.sh 0 20       # gpu_id=0, max_episodes=20
 | File | Contents |
 | --- | --- |
 | `requirements.txt` | Curated SmolVLA worker dependencies, pinned to the versions we used (CUDA 12.8 stack) |
-| `requirements-freeze.txt` | The exact 134-package `pip freeze` of the training / evaluation environment, with `lerobot` bumped to the 0.6.2 the worker needs |
+| `requirements-freeze.txt` | The exact 134-package `pip freeze` of the training / evaluation environment, with `lerobot` moved to the 0.6.1 the worker needs |
 
 - Simulator dependencies are those of the official **EmbodiChain** installer; we did not add or pin
   anything there. If that environment already provides compatible `torch` / `torchvision` /
@@ -231,7 +231,7 @@ worker now re-seeds `random` / `numpy` / `torch` (CPU + CUDA) from the episode s
 
 ### 9.4 LeRobot version
 
-`requirements.txt` pins **`lerobot==0.6.2`**. The worker imports `policy_action_to_transition` /
+`requirements.txt` pins **`lerobot==0.6.1`**. The worker imports `policy_action_to_transition` /
 `transition_to_policy_action` from `lerobot.processor`; those are re-exported from that module only
 from 0.6 on (on 0.4.x they live only under `lerobot.processor.converters`, which the worker also
 falls back to).

@@ -24,7 +24,7 @@
 # The versions below are the CUDA 12.8 stack.
 #
 # Reproduced from our frozen training / evaluation environment:
-#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.6.2
+#     Python 3.10.12 | torch 2.10.0+cu128 | lerobot 0.6.1
 # A complete 134-package freeze is provided in requirements-freeze.txt.
 # ---------------------------------------------------------------------------
 
@@ -42,10 +42,12 @@ torchvision==0.25.0
 # `policy_action_to_transition` / `transition_to_policy_action` are re-exported
 # from that module only from LeRobot 0.6 on (on 0.4.x they exist only under
 # `lerobot.processor.converters`, which the worker also falls back to).
-# 0.6.2 is the release we validated the checkpoints against.
+# 0.6.1 is the newest LeRobot release published on PyPI; the worker needs >= 0.6.
+# NOTE: do NOT pin the next patch version -- it does not exist on PyPI and the
+# install aborts with "No matching distribution found".
 # May also be installed from source by policy/smolvla/setup_lerobot.sh, which
 # is what the README recommends.
-lerobot==0.6.2
+lerobot==0.6.1
 
 # --- SmolVLA / SmolVLM runtime ---------------------------------------------
 transformers==4.57.6

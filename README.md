@@ -96,8 +96,9 @@ RoboSynChallenge_ws/
 > **LeRobot must be >= 0.6.** The worker builds its processor pipelines from
 > `lerobot.processor`; `policy_action_to_transition` / `transition_to_policy_action` are
 > re-exported from that module only from 0.6 on (on 0.4.x they exist only under
-> `lerobot.processor.converters`, which the worker also falls back to). We validated the
-> checkpoints against **0.6.2**.
+> `lerobot.processor.converters`, which the worker also falls back to). We pin **0.6.1**,
+> the newest release published on PyPI -- note there is no `0.6.2` on PyPI, so any pin
+> on that version would abort the install.
 
 ```bash
 # Option A: install LeRobot from inside this repository (recommended)
@@ -110,7 +111,7 @@ export SMOLVLA_LEROBOT_ROOT=/path/to/lerobot
 # If the same environment also runs the SmolVLA worker (it may be the same one):
 export SMOLVLA_PYTHON="$(which python)"
 
-# Python packages (pins lerobot==0.6.2, torch cu128, transformers 4.57.6):
+# Python packages (pins lerobot==0.6.1, torch cu128, transformers 4.57.6):
 pip install -r requirements.txt
 ```
 
@@ -124,7 +125,7 @@ The official evaluation host is a **single RTX 5090 (Blackwell, sm_120)** with *
 Our stack is CUDA 12.8:
 
 ```
-Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.2 | transformers 4.57.6
+Python 3.10.12 | torch 2.10.0+cu128 | torchvision 0.25.0 | lerobot 0.6.1 | transformers 4.57.6
 ```
 
 If your resolver does not pick the cu128 build by default:
@@ -152,6 +153,31 @@ export HF_HOME=<writable cache dir>
 hf download HuggingFaceTB/SmolVLM2-500M-Video-Instruct
 ```
 </details>
+
+### 3.1 Pre-flight check (run this before the full evaluation)
+
+Skipping this is how a submission silently scores **zero on all ten tasks**: the harness
+starts, the simulator comes up, and the worker dies at the *very first* policy query.
+The command below reproduces the worker's own startup path — **no simulator required,
+~30 s**:
+
+```bash
+CK=checkpoints/click_bell        # any of the ten
+echo "" | timeout 420 python policy/smolvla/smolvla_worker.py \
+    --checkpoint-dir "$CK" --device cuda ; echo "rc=$?"
+```
+
+`rc=0`, no `ImportError`, and no repeated `Network is unreachable` means the environment
+is ready. The three failure modes that abort a run at the first rollout:
+
+| Symptom in the worker output | Cause | Fix |
+| --- | --- | --- |
+| `ImportError: Package 'num2words' is required to run SmolVLM processor` | `num2words` is missing from the worker environment — `pip install -e .` for LeRobot does **not** pull it in | `pip install num2words==0.5.14` |
+| `Loading HuggingFaceTB/SmolVLM2-500M-Video-Instruct weights ...` followed by `Network is unreachable` retries (1/2/4/8/8 s) | the SmolVLM2 tokenizer/processor assets are fetched **by name** on first use and the host has no route to the Hub | pre-populate the cache (panel above), or point `HF_ENDPOINT` at a reachable mirror |
+| `RuntimeError: SmolVLA worker exited unexpectedly.` | always a *consequence*, never the cause — read the worker's own traceback printed above it | fix the underlying error (the two rows above) |
+
+Note that the checkpoints themselves are self-contained; only the SmolVLM2
+tokenizer/processor assets come from the Hub by name.
 
 ## 4. Run the evaluation
 
@@ -253,7 +279,7 @@ behaviour when that attribute is absent.
 
 ### 5.4 LeRobot version
 
-`requirements.txt` pins **`lerobot==0.6.2`**. `smolvla_worker.py` imports
+`requirements.txt` pins **`lerobot==0.6.1`**. `smolvla_worker.py` imports
 `policy_action_to_transition` / `transition_to_policy_action` from `lerobot.processor`, which
 only re-exports them from 0.6 on; the worker also falls back to `lerobot.processor.converters`
 for 0.4.x-style layouts.
